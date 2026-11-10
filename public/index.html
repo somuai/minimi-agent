@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chronos - Minimi Chat Agent</title>
+  <style>
+    :root {
+      --bg: #0c0e12;
+      --card-bg: #14171f;
+      --border: #262b36;
+      --accent: #3b82f6;
+      --accent-hover: #2563eb;
+      --text: #f3f4f6;
+      --text-muted: #9ca3af;
+      --chip-bg: #1e2430;
+      --chip-border: #323b4d;
+      --table-border: #2e3646;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background-color: var(--bg); color: var(--text); display: flex; height: 100vh; overflow: hidden; }
+
+    /* Sidebar */
+    #sidebar {
+      width: 320px;
+      background: var(--card-bg);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      padding: 20px;
+      gap: 16px;
+    }
+
+    .brand-title { font-size: 1.1rem; font-weight: 700; letter-spacing: -0.02em; }
+    .brand-subtitle { font-size: 0.75rem; color: var(--text-muted); line-height: 1.4; }
+
+    /* Dropzone */
+    .dropzone {
+      border: 2px dashed var(--border);
+      border-radius: 8px;
+      padding: 18px;
+      text-align: center;
+      background: rgba(255, 255, 255, 0.02);
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .dropzone:hover, .dropzone.dragover {
+      border-color: var(--accent);
+      background: rgba(59, 130, 246, 0.05);
+    }
+    .dropzone-label { font-size: 0.82rem; font-weight: 600; margin-bottom: 4px; }
+    .dropzone-hint { font-size: 0.7rem; color: var(--text-muted); }
+
+    /* Ingested Files List */
+    .section-header { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.05em; }
+    #files-list { list-style: none; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 8px; }
+    .file-item {
+      background: var(--chip-bg);
+      border: 1px solid var(--chip-border);
+      border-radius: 6px;
+      padding: 8px 12px;
+      font-size: 0.75rem;
+    }
+    .file-item-name { font-weight: 600; margin-bottom: 2px; }
+    .file-item-meta { font-size: 0.68rem; color: var(--text-muted); }
+
+    /* Main Chat Area */
+    #main-chat { flex: 1; display: flex; flex-direction: column; height: 100vh; position: relative; }
+    #chat-messages { flex: 1; overflow-y: auto; padding: 24px 32px; display: flex; flex-direction: column; gap: 20px; }
+
+    .msg { display: flex; flex-direction: column; max-width: 85%; animation: fadeIn 0.2s ease; }
+    .msg.user { align-self: flex-end; }
+    .msg.assistant { align-self: flex-start; max-width: 90%; }
+
+    .msg-bubble {
+      padding: 14px 18px;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      line-height: 1.55;
+    }
+    .msg.user .msg-bubble { background: var(--accent); color: #fff; border-bottom-right-radius: 2px; }
+    .msg.assistant .msg-bubble { background: var(--card-bg); border: 1px solid var(--border); border-bottom-left-radius: 2px; }
+
+    .msg-status-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      color: #60a5fa;
+      background: rgba(59, 130, 246, 0.1);
+      border: 1px solid rgba(59, 130, 246, 0.25);
+      border-radius: 4px;
+      padding: 3px 8px;
+      margin-bottom: 8px;
+      width: fit-content;
+    }
+
+    /* Markdown tables inside messages */
+    table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 0.8rem; }
+    th, td { border: 1px solid var(--table-border); padding: 8px 12px; text-align: left; }
+    th { background: #1a1e27; font-weight: 600; color: #93c5fd; }
+    tr:nth-child(even) { background: rgba(255, 255, 255, 0.02); }
+    a { color: #60a5fa; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* Input Footer */
+    #chat-input-bar {
+      padding: 16px 24px;
+      background: var(--card-bg);
+      border-top: 1px solid var(--border);
+      display: flex;
+      gap: 12px;
+    }
+    #prompt-input {
+      flex: 1;
+      background: #0f1218;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      padding: 12px 16px;
+      font-size: 0.88rem;
+      outline: none;
+    }
+    #prompt-input:focus { border-color: var(--accent); }
+    #send-btn {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      padding: 0 20px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    #send-btn:hover { background: var(--accent-hover); }
+
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+  </style>
+</head>
+<body>
+  <!-- Sidebar -->
+  <div id="sidebar">
+    <div>
+      <div class="brand-title">Chronos Agent</div>
+      <div class="brand-subtitle">Minimi Hiring Challenge Architecture</div>
+      <div class="brand-subtitle">Episodic Temporal Memory + Live Web Search</div>
+    </div>
+
+    <!-- Drag & Drop Upload Zone -->
+    <div class="dropzone" id="dropzone">
+      <div class="dropzone-label">Upload Context File</div>
+      <div class="dropzone-hint">Drag & drop .md, .txt, .json notes here</div>
+      <input type="file" id="file-input" style="display:none" accept=".md,.txt,.json,.csv">
+    </div>
+
+    <div class="section-header">Ingested User Context (<span id="file-count">0</span>)</div>
+    <ul id="files-list">
+      <li style="font-size:0.75rem; color:var(--text-muted);">No documents uploaded yet. Upload meeting notes or transcripts above.</li>
+    </ul>
+
+    <div style="font-size:0.7rem; color:var(--text-muted); border-top:1px solid var(--border); padding-top:12px;">
+      Zero Pre-Seeded Mock Data<br>
+      Single Tool: Web Search<br>
+      Latency: Parallel Fan-Out
+    </div>
+  </div>
+
+  <!-- Chat Area -->
+  <div id="main-chat">
+    <div id="chat-messages">
+      <div class="msg assistant">
+        <div class="msg-status-chip">CHRONOS CORE READY</div>
+        <div class="msg-bubble">
+          Chronos is initialized with zero pre-seeded mock data.<br><br>
+          You can interact by typing directly or dropping evaluation notes, transcripts, or vendor shortlists in the left sidebar.<br><br>
+          Example queries to test:<br>
+          - "On Monday we shortlisted 5 CRM tools for a 20-person sales team. Has any of them changed pricing or shipped something big since?"<br>
+          - "What did I ask you on 3 November? Is your answer still correct today?"<br>
+          - "Last Tuesday I asked you about Postgres hosting. Has any pricing changed since then?"
+        </div>
+      </div>
+    </div>
+
+    <div id="chat-input-bar">
+      <input type="text" id="prompt-input" placeholder="Ask a question or reference past evaluations..." autofocus>
+      <button id="send-btn">Send</button>
+    </div>
+  </div>
+
+  <script>
+    const messagesContainer = document.getElementById("chat-messages");
+    const promptInput = document.getElementById("prompt-input");
+    const sendBtn = document.getElementById("send-btn");
+    const dropzone = document.getElementById("dropzone");
+    const fileInput = document.getElementById("file-input");
+    const filesList = document.getElementById("files-list");
+    const fileCount = document.getElementById("file-count");
+
+    // File Drag & Drop Handlers
+    dropzone.addEventListener("click", () => fileInput.click());
+    dropzone.addEventListener("dragover", (e) => { e.preventDefault(); dropzone.classList.add("dragover"); });
+    dropzone.addEventListener("dragleave", () => dropzone.classList.remove("dragover"));
+    dropzone.addEventListener("drop", (e) => {
+      e.preventDefault();
+      dropzone.classList.remove("dragover");
+      if (e.dataTransfer.files.length > 0) handleFileUpload(e.dataTransfer.files[0]);
+    });
+    fileInput.addEventListener("change", (e) => {
+      if (e.target.files.length > 0) handleFileUpload(e.target.files[0]);
+    });
+
+    async function handleFileUpload(file) {
+      const text = await file.text();
+      try {
+        const res = await fetch("/api/upload", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ filename: file.name, content: text, fileType: file.name.split(".").pop() })
+        });
+        const data = await res.json();
+        if (data.success) {
+          refreshStats();
+          appendSystemMessage(`Uploaded "${file.name}" with ${data.result.entityCount} extracted assertions.`);
+        }
+      } catch (err) {
+        alert("Upload error: " + err.message);
+      }
+    }
+
+    async function refreshStats() {
+      try {
+        const res = await fetch("/api/stats");
+        const data = await res.json();
+        fileCount.textContent = data.uploadedFiles.length;
+        if (data.uploadedFiles.length > 0) {
+          filesList.innerHTML = data.uploadedFiles.map(f => {
+            const date = new Date(f.extracted_date).toISOString().split("T")[0];
+            return `<li class="file-item">
+              <div class="file-item-name">${f.filename}</div>
+              <div class="file-item-meta">Date: ${date} | ${f.content.length} bytes</div>
+            </li>`;
+          }).join("");
+        }
+      } catch {}
+    }
+
+    refreshStats();
+
+    // Send Message Handler
+    sendBtn.addEventListener("click", sendMessage);
+    promptInput.addEventListener("keydown", (e) => { if (e.key === "Enter") sendMessage(); });
+
+    async function sendMessage() {
+      const text = promptInput.value.trim();
+      if (!text) return;
+      promptInput.value = "";
+
+      // Append user bubble
+      appendMessage("user", text);
+
+      // Create assistant container
+      const assistantMsg = document.createElement("div");
+      assistantMsg.className = "msg assistant";
+
+      const statusChip = document.createElement("div");
+      statusChip.className = "msg-status-chip";
+      statusChip.textContent = "PLANNING...";
+      assistantMsg.appendChild(statusChip);
+
+      const bubble = document.createElement("div");
+      bubble.className = "msg-bubble";
+      assistantMsg.appendChild(bubble);
+
+      messagesContainer.appendChild(assistantMsg);
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+      try {
+        const response = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: text })
+        });
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let rawAnswer = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          const chunk = decoder.decode(value);
+          const lines = chunk.split("\n");
+
+          for (const line of lines) {
+            if (line.startsWith("data: ")) {
+              try {
+                const data = JSON.parse(line.slice(6));
+                if (data.type === "plan") {
+                  statusChip.textContent = `INTENT: ${data.intent} (${data.queries.length} SEARCHES)`;
+                } else if (data.type === "search_completed") {
+                  statusChip.textContent = `SEARCH COMPLETE (${data.count} QUERIES)`;
+                } else if (data.type === "token") {
+                  rawAnswer += data.token;
+                  bubble.innerHTML = renderMarkdown(rawAnswer);
+                  messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                } else if (data.type === "done") {
+                  statusChip.textContent = `COMPLETED IN ${data.latencyMs}ms`;
+                }
+              } catch {}
+            }
+          }
+        }
+      } catch (err) {
+        statusChip.textContent = "ERROR";
+        bubble.textContent = "Execution error: " + err.message;
+      }
+    }
+
+    function appendMessage(role, text) {
+      const msg = document.createElement("div");
+      msg.className = `msg ${role}`;
+      const bubble = document.createElement("div");
+      bubble.className = "msg-bubble";
+      bubble.textContent = text;
+      msg.appendChild(bubble);
+      messagesContainer.appendChild(msg);
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
+
+    function appendSystemMessage(text) {
+      const msg = document.createElement("div");
+      msg.className = "msg assistant";
+      const bubble = document.createElement("div");
+      bubble.className = "msg-bubble";
+      bubble.style.border = "1px solid #3b82f6";
+      bubble.textContent = "[SYSTEM] " + text;
+      msg.appendChild(bubble);
+      messagesContainer.appendChild(msg);
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
+
+    function renderMarkdown(md) {
+      // Basic markdown table, link, bold, and list renderer
+      let html = md
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+        .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
+        .replace(/\[(.*?)\]\((https?:\/\/[^\s]+)\)/g, '<a href="$2" target="_blank">$1</a>')
+        .replace(/\n\n/g, "<br><br>")
+        .replace(/\n- (.*?)/g, "<br>• $1");
+
+      // Simple Table conversion
+      if (html.includes("|")) {
+        const lines = html.split("<br>");
+        let inTable = false;
+        let tableHtml = "<table>";
+        const processedLines = [];
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (trimmed.startsWith("|") && trimmed.endsWith("|")) {
+            if (!inTable) { inTable = true; tableHtml = "<table>"; }
+            const cells = trimmed.split("|").slice(1, -1).map(c => c.trim());
+            if (cells.some(c => c.includes("---"))) continue;
+            const isHeader = !tableHtml.includes("tr");
+            const tag = isHeader ? "th" : "td";
+            tableHtml += "<tr>" + cells.map(c => `<${tag}>${c}</${tag}>`).join("") + "</tr>";
+          } else {
+            if (inTable) { inTable = false; tableHtml += "</table>"; processedLines.push(tableHtml); }
+            processedLines.push(line);
+          }
+        }
+        if (inTable) { tableHtml += "</table>"; processedLines.push(tableHtml); }
+        html = processedLines.join("<br>");
+      }
+
+      return html;
+    }
+  </script>
+</body>
+</html>
